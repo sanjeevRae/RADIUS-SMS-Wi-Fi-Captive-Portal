@@ -166,7 +166,7 @@ $stmt->execute();
 
 The sequence diagram below illustrates the complete authentication process from user connection to internet access:
 
-![Sequence Diagram](https://github.com/sanjeevRae/RADIUS-SMS-Wi-Fi-Captive-Portal/blob/main/Sequence%2520Diagram.png)
+![forgit](https://github.com/sanjeevRae/RADIUS-SMS-Wi-Fi-Captive-Portal/blob/main/Sequence%20Diagram.png)
 
 **Flow Steps:**
 
