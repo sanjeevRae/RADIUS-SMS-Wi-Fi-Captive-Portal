@@ -78,6 +78,36 @@ function send_sms_otp(string $mobile, string $otp, string $api_token, string $sm
 
 define('OTP_TTL', 300);
 
+/**
+ * Write a single OTP lifecycle event to the MariaDB otp_log table.
+ *
+ * @param mysqli $db     Active database connection
+ * @param string $mobile Mobile number involved
+ * @param string $event  One of: requested | verified | failed | expired
+ */
+function log_otp_event(mysqli $db, string $mobile, string $event): void {
+    $ip         = $_SERVER['REMOTE_ADDR']          ?? null;
+    $mac        = $_SESSION['client_mac']           ?? null;
+    $mikrotik   = $_SESSION['mikrotik_ip']          ?? null;
+    $user_agent = isset($_SERVER['HTTP_USER_AGENT'])
+                    ? substr($_SERVER['HTTP_USER_AGENT'], 0, 255)
+                    : null;
+
+    $stmt = $db->prepare(
+        "INSERT INTO otp_log (mobile, event, ip_address, mac_address, mikrotik_ip, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmt) {
+        error_log("otp_log prepare failed: " . $db->error);
+        return;
+    }
+    $stmt->bind_param("ssssss", $mobile, $event, $ip, $mac, $mikrotik, $user_agent);
+    if (!$stmt->execute()) {
+        error_log("otp_log insert failed: " . $stmt->error);
+    }
+    $stmt->close();
+}
+
 if(isset($_POST['otp_input'])){
     if (!isset($_SESSION['otp_attempts'])) $_SESSION['otp_attempts'] = 0;
     if ($_SESSION['otp_attempts'] >= 5) {
@@ -95,6 +125,7 @@ if(isset($_POST['otp_input'])){
         unset($_SESSION['otp'], $_SESSION['otp_time'], $_SESSION['otp_attempts']);
         $stored_otp = '';
         error_log("OTP expired for $mobile");
+        log_otp_event($conn, $mobile, 'expired');
     }
 
     error_log("OTP Verification - User: $user_otp, Mobile: $mobile");
@@ -107,6 +138,7 @@ if(isset($_POST['otp_input'])){
         $dst = isset($_SESSION['dst']) ? $_SESSION['dst'] : '';
 
         error_log("OTP verified! Posting login to MikroTik at: $hotspot_ip, user: $mobile, dst: $dst");
+        log_otp_event($conn, $mobile, 'verified');
 
         $check = $conn->prepare("SELECT value FROM radcheck WHERE username = ? AND attribute = 'Cleartext-Password'");
         $check->bind_param("s", $mobile);
@@ -255,6 +287,7 @@ if(isset($_POST['otp_input'])){
         $_SESSION['otp_attempts']++;
         $attempts_left = 5 - $_SESSION['otp_attempts'];
         error_log("OTP MISMATCH - User entered: '$user_otp', Expected: '$stored_otp', Mobile: $mobile, Attempts left: $attempts_left");
+        log_otp_event($conn, $mobile, 'failed');
         ?>
         <!DOCTYPE html>
         <html>
@@ -357,6 +390,7 @@ if(isset($_POST['mobile'])){
     $stmt->close();
     $sms_result = send_sms_otp($mobile, $otp, $aakash_api_token, $aakash_sms_url);
     error_log("Aakash SMS result for $mobile: " . json_encode($sms_result));
+    log_otp_event($conn, $mobile, 'requested');
 
     if (!$sms_result['success']) {
         error_log("SMS sending failed: " . $sms_result['error']);
