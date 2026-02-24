@@ -147,18 +147,11 @@ Allow access to your web server and DNS:
 
 Place PHP files in `/var/www/html/`:
 
-- `index.php` – Collect mobile number, generate OTP, send via Aakash SMS
-- `verify.php` – Validate OTP, create RADIUS user in `radcheck` table
-- `config.php` – Database and SMS API credentials
+- `smsotp.php` – Collect mobile number, generate OTP, send via Aakash SMS
 
-Example OTP insertion:
+Replace login.html files in your `Microtick File`: 
 
-```php
-// After OTP verification, create RADIUS user
-$stmt = $conn->prepare("INSERT INTO radcheck (username, attribute, op, value) VALUES (?, 'Cleartext-Password', ':=', ?)");
-$stmt->bind_param("ss", $mobile, $otp);
-$stmt->execute();
-```
+- `login.html` – Redirects to the `smsotp.php` on `FreeRadus`
 
 ---
 
